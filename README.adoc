@@ -1,0 +1,88 @@
+
+---
+= Run DynamoDB
+---
+
+[source]
+----
+docker run -p 8000:8000 -d -v $(pwd)/local/dynamodb:/data/ amazon/dynamodb-local -jar DynamoDBLocal.jar -sharedDb -dbPath /data
+----
+
+Log into shell
+
+[source]
+----
+http://localhost:8000/shell/
+----
+
+Create Customer table
+
+[source]
+----
+aws dynamodb create-table --table-name Customer --attribute-definitions AttributeName=Id,AttributeType=S --key-schema AttributeName=Id,KeyType=HASH --provisioned-throughput ReadCapacityUnits=1,WriteCapacityUnits=1 --endpoint-url http://localhost:8000
+----
+
+= Run the App
+
+[source]
+----
+./gradlew clean bootRun
+----
+
+= Populate Data
+
+brew install httpie
+
+[source]
+----
+ http GET http://localhost:8080/save
+----
+
+= Query Data
+
+[source]
+----
+http GET  http://localhost:8080/findall
+----
+----
+http  GET  http://localhost:8080/findbyid?id=JSA-5
+----
+----
+http  GET   http://localhost:8080/delete
+----
+
+= Check Data in Shell
+
+[source]
+----
+var dynamodb = new AWS.DynamoDB({
+region: 'eu-west-2',
+endpoint: "http://localhost:8000"
+});
+var tableName = "Customer";
+
+var params = {
+TableName: tableName,
+Select: "ALL_ATTRIBUTES"
+};
+
+function doScan(response) {
+  if (response.error) ppJson(response.error); // an error occurred
+  else {
+    ppJson(response.data); // successful response
+
+    // More data.  Keep calling scan.
+    if ('LastEvaluatedKey' in response.data) {
+      response.request.params.ExclusiveStartKey = response.data.LastEvaluatedKey;
+      dynamodb.scan(response.request.params)
+        .on('complete', doScan)
+        .send();
+    }
+  }
+}
+
+console.log("Starting a Scan of the table");
+dynamodb.scan(params)
+.on('complete', doScan)
+.send();
+----
